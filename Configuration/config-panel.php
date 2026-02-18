@@ -253,6 +253,22 @@ a.blue{
 
 }
 
+/* -------- Prefix Options Map -------- */
+// Keys are stable ASCII identifiers stored in DB.
+// Labels are the Persian display strings shown in the UI.
+function sg_get_prefix_options() {
+    return [
+        'mr'       => 'جناب آقای',
+        'ms'       => 'سرکار خانم',
+        'student1' => 'دانش آموز عزیز،',
+        'student2' => 'دانش آموز گرامی،',
+        'child'    => 'فرزند عزیز،',
+        'uni1'     => 'دانشجوی عزیز',
+        'uni2'     => 'دانشجوی گرامی',
+        'none'     => 'بدون پیشوند',
+    ];
+}
+
 /* -------- Defaults Engine -------- */
 function sg_get_user_settings($user_id){
     $defaults = [
@@ -261,7 +277,7 @@ function sg_get_user_settings($user_id){
         'alert_hour_teacher' => 18,
         'eitaa_channel_id' => '',
         'message_footer' => '',
-        'name_prefix' => 'جناب آقای',
+        'name_prefix' => 'mr',   // default is now a stable key, not a Persian string
         'include_poem' => 1,
         'trial_reminder_enabled' => 1
     ];
@@ -307,7 +323,12 @@ function sg_render_settings_form_for_shortcode() {
         update_user_meta($uid,'alert_hour_teacher', intval($_POST['alert_hour_teacher']));
         update_user_meta($uid,'eitaa_channel_id', sanitize_text_field($_POST['eitaa_channel_id']));
         update_user_meta($uid,'message_footer', sanitize_text_field($_POST['message_footer']));
-        update_user_meta($uid,'name_prefix', sanitize_text_field($_POST['name_prefix']));
+
+        // Use sanitize_key() — safe for our ASCII keys, no Unicode corruption possible
+        $valid_prefix_keys = array_keys(sg_get_prefix_options());
+        $submitted_prefix  = sanitize_key($_POST['name_prefix'] ?? '');
+        update_user_meta($uid,'name_prefix', in_array($submitted_prefix, $valid_prefix_keys) ? $submitted_prefix : 'mr');
+
         update_user_meta($uid,'include_poem', isset($_POST['include_poem']) ? 1 : 0);
         update_user_meta($uid,'trial_reminder_enabled', isset($_POST['trial_reminder_enabled']) ? 1 : 0);
         $html .= '<div class="updated"><p>تنظیمات ذخیره شد</p></div>';
@@ -370,8 +391,14 @@ function sg_render_settings_form_for_shortcode() {
 
             <!-- Prefix -->
             <div class="sg-settings-section"><h3>پیشوند نام</h3>
-                <?php foreach(['جناب آقای','سرکار خانم', 'دانش آموز عزیز، ', 'دانش آموز گرامی، ', 'فرزند عزیز، ', 'دانشجوی عزیز', 'دانشجوی گرامی', 'بدون پیشوند'] as $p): ?>
-                    <label><input type="radio" name="name_prefix" value="<?= $p ?>" <?= ($settings['name_prefix']==$p)?'checked':'' ?>> <?= $p ?></label><br>
+                <?php foreach(sg_get_prefix_options() as $key => $label): ?>
+                    <label>
+                        <input type="radio"
+                               name="name_prefix"
+                               value="<?= esc_attr($key) ?>"
+                               <?= ($settings['name_prefix'] === $key) ? 'checked' : '' ?>>
+                        <?= esc_html($label) ?>
+                    </label><br>
                 <?php endforeach; ?>
                 <span class="sg-field-desc">انتخاب پیشوند برای نام دانش‌آموز در پیام</span>
             </div>
@@ -391,7 +418,7 @@ function sg_render_settings_form_for_shortcode() {
         </form>
     </div>
     <?php
-    return ob_get_clean();
+    return $html . ob_get_clean();
 }
 
 /* -------- Shortcode -------- */
