@@ -232,6 +232,10 @@ a.blue{
 .mihanpanelpanel form input[type=radio]:after {
     display: none !important;
 }
+
+.mihanpanelpanel form input[type=checkbox] {
+    visibility: hidden !important;
+}
 /* ---------- Responsive ---------- */
 
 @media(max-width:700px){
