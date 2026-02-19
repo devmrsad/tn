@@ -347,7 +347,7 @@ function sg_render_settings_form_for_shortcode() {
             <div class="sg-settings-section"><h3>قالب‌ها</h3>
                 <div class="sg-frames-grid">
                 <?php
-                $base = "https://your-image-server.com/frame-preview/";
+                $base = "https://my.tahanic.ir/frame-pics/";
                 foreach([1,2,3,4,5,6] as $f):
                     $checked = in_array($f,$settings['selected_frames']) ? 'checked':'';
                     $selected_class = $checked ? 'selected':'';
