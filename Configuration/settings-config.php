@@ -2,14 +2,188 @@
 /*
 Plugin Name: Settings Configuration
 Description: تنظیمات پیکربندی پیام
-Version: 1.0
+Version: 2.0
 Author: Mohammadreza
 */
 
 if (!defined('ABSPATH'))
     exit;
 
-/* -------- SAME CSS SYSTEM -------- */
+/* ======================================================
+   TABLE MANAGEMENT
+====================================================== */
+
+function sg_table_name()
+{
+    global $wpdb;
+    return $wpdb->prefix . 'sg_config';
+}
+
+/**
+ * Create the table on plugin activation.
+ * UNIQUE KEY on user_id prevents duplicates.
+ */
+define('SG_CONFIG_DB_VERSION', '1.0');
+
+function sg_create_table()
+{
+    global $wpdb;
+    $table = sg_table_name();
+    $charset_collate = $wpdb->get_charset_collate();
+
+    // dbDelta is strict: 2 spaces indent, KEY on its own line, no trailing comma before closing paren
+    $sql = "CREATE TABLE {$table} (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  send_message TINYINT(1) NOT NULL DEFAULT 1,
+  send_hour_channel TINYINT(2) NOT NULL DEFAULT 10,
+  send_teacher TINYINT(1) NOT NULL DEFAULT 1,
+  send_hour_teacher TINYINT(2) NOT NULL DEFAULT 18,
+  name_prefix VARCHAR(20) NOT NULL DEFAULT 'mr',
+  message_footer VARCHAR(255) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_user_id (user_id)
+) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta($sql);
+
+    update_option('sg_config_db_version', SG_CONFIG_DB_VERSION);
+}
+
+// Run on activation (standard path)
+register_activation_hook(__FILE__, 'sg_create_table');
+
+// Also run on plugins_loaded if table version is missing/outdated.
+// This handles cases where the plugin was already active when the
+// table code was added, or the activation hook was skipped for any reason.
+add_action('plugins_loaded', function () {
+    if (get_option('sg_config_db_version') !== SG_CONFIG_DB_VERSION) {
+        sg_create_table();
+    }
+});
+
+/**
+ * Insert a default row for a newly registered user.
+ * The IGNORE keyword silently skips if the row already exists.
+ */
+function sg_insert_default_row($user_id)
+{
+    global $wpdb;
+    $defaults = sg_config_defaults();
+    $wpdb->query(
+        $wpdb->prepare(
+            "INSERT IGNORE INTO " . sg_table_name() . "
+             (user_id, send_message, send_hour_channel, send_teacher, send_hour_teacher, name_prefix, message_footer)
+             VALUES (%d, %d, %d, %d, %d, %s, %s)",
+            $user_id,
+            $defaults['send_message'],
+            $defaults['send_hour_channel'],
+            $defaults['send_teacher'],
+            $defaults['send_hour_teacher'],
+            $defaults['name_prefix'],
+            $defaults['message_footer']
+        )
+    );
+}
+add_action('user_register', 'sg_insert_default_row');
+
+/* ======================================================
+   DATA HELPERS
+====================================================== */
+
+function sg_config_prefix_options()
+{
+    return [
+        'mr' => 'جناب آقای',
+        'ms' => 'سرکار خانم',
+        'student1' => 'دانش آموز عزیز،',
+        'student2' => 'دانش آموز گرامی،',
+        'child' => 'فرزند عزیز،',
+        'uni1' => 'دانشجوی عزیز',
+        'uni2' => 'دانشجوی گرامی',
+        'none' => 'بدون پیشوند',
+    ];
+}
+
+function sg_config_defaults()
+{
+    return [
+        'send_message' => 1,
+        'send_hour_channel' => 10,
+        'send_teacher' => 1,
+        'send_hour_teacher' => 18,
+        'name_prefix' => 'mr',
+        'message_footer' => '',
+    ];
+}
+
+/**
+ * Fetch config for a user.
+ * If no row exists yet (e.g. users created before activation),
+ * a default row is inserted on-the-fly and defaults are returned.
+ */
+function sg_get_config_settings($user_id)
+{
+    global $wpdb;
+
+    $row = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT * FROM " . sg_table_name() . " WHERE user_id = %d LIMIT 1",
+            $user_id
+        ),
+        ARRAY_A
+    );
+
+    if ($row === null) {
+        sg_insert_default_row($user_id);
+        return sg_config_defaults();
+    }
+
+    $defaults = sg_config_defaults();
+    $settings = [];
+    foreach ($defaults as $key => $default) {
+        $settings[$key] = isset($row[$key]) && $row[$key] !== '' ? $row[$key] : $default;
+    }
+    return $settings;
+}
+
+/**
+ * Save config for a user.
+ * Uses INSERT … ON DUPLICATE KEY UPDATE to handle both
+ * new rows and updates atomically — no duplicates possible.
+ */
+function sg_save_config_settings($user_id, $data)
+{
+    global $wpdb;
+
+    $wpdb->query(
+        $wpdb->prepare(
+            "INSERT INTO " . sg_table_name() . "
+             (user_id, send_message, send_hour_channel, send_teacher, send_hour_teacher, name_prefix, message_footer)
+             VALUES (%d, %d, %d, %d, %d, %s, %s)
+             ON DUPLICATE KEY UPDATE
+                send_message      = VALUES(send_message),
+                send_hour_channel = VALUES(send_hour_channel),
+                send_teacher      = VALUES(send_teacher),
+                send_hour_teacher = VALUES(send_hour_teacher),
+                name_prefix       = VALUES(name_prefix),
+                message_footer    = VALUES(message_footer)",
+            $user_id,
+            $data['send_message'],
+            $data['send_hour_channel'],
+            $data['send_teacher'],
+            $data['send_hour_teacher'],
+            $data['name_prefix'],
+            $data['message_footer']
+        )
+    );
+}
+
+/* ======================================================
+   CSS  (unchanged)
+====================================================== */
+
 add_action('admin_head', 'sg_config_css');
 add_action('wp_head', 'sg_config_css');
 
@@ -104,48 +278,10 @@ h3{
 </style>';
 }
 
-/* -------- Prefix Options -------- */
-function sg_config_prefix_options()
-{
-    return [
-        'mr' => 'جناب آقای',
-        'ms' => 'سرکار خانم',
-        'student1' => 'دانش آموز عزیز،',
-        'student2' => 'دانش آموز گرامی،',
-        'child' => 'فرزند عزیز،',
-        'uni1' => 'دانشجوی عزیز',
-        'uni2' => 'دانشجوی گرامی',
-        'none' => 'بدون پیشوند',
-    ];
-}
+/* ======================================================
+   ADMIN MENU
+====================================================== */
 
-/* -------- Defaults -------- */
-function sg_config_defaults()
-{
-    return [
-        'send_message' => 1,
-        'send_hour_channel' => 10,
-        'send_teacher' => 1,
-        'send_hour_teacher' => 18,
-        'name_prefix' => 'mr',
-        'message_footer' => ''
-    ];
-}
-
-function sg_get_config_settings($user_id)
-{
-    $defaults = sg_config_defaults();
-    $settings = [];
-
-    foreach ($defaults as $key => $value) {
-        $stored = get_user_meta($user_id, $key, true);
-        $settings[$key] = ($stored === '') ? $value : $stored;
-    }
-
-    return $settings;
-}
-
-/* -------- Admin Menu -------- */
 add_action('admin_menu', function () {
     add_menu_page(
         'Settings Configuration',
@@ -158,13 +294,15 @@ add_action('admin_menu', function () {
     );
 });
 
-/* -------- Render Page -------- */
 function sg_render_config_page()
 {
     echo sg_render_config_form();
 }
 
-/* -------- Shortcode -------- */
+/* ======================================================
+   SHORTCODE + FORM
+====================================================== */
+
 add_shortcode('sg_settings_config', 'sg_render_config_form');
 
 function sg_render_config_form()
@@ -179,16 +317,19 @@ function sg_render_config_form()
 
     if (isset($_POST['sg_save_config'])) {
 
-        update_user_meta($uid, 'send_message', isset($_POST['send_message']) ? intval($_POST['send_message']) : 0);
-        update_user_meta($uid, 'send_hour_channel', intval($_POST['send_hour_channel']));
-        update_user_meta($uid, 'send_teacher', isset($_POST['send_teacher']) ? intval($_POST['send_teacher']) : 0);
-        update_user_meta($uid, 'send_hour_teacher', intval($_POST['send_hour_teacher']));
-
         $valid_prefix = array_keys(sg_config_prefix_options());
         $prefix = sanitize_key($_POST['name_prefix']);
-        update_user_meta($uid, 'name_prefix', in_array($prefix, $valid_prefix) ? $prefix : 'mr');
 
-        update_user_meta($uid, 'message_footer', sanitize_text_field($_POST['message_footer']));
+        $data = [
+            'send_message' => isset($_POST['send_message']) ? intval($_POST['send_message']) : 0,
+            'send_hour_channel' => intval($_POST['send_hour_channel']),
+            'send_teacher' => isset($_POST['send_teacher']) ? intval($_POST['send_teacher']) : 0,
+            'send_hour_teacher' => intval($_POST['send_hour_teacher']),
+            'name_prefix' => in_array($prefix, $valid_prefix) ? $prefix : 'mr',
+            'message_footer' => sanitize_text_field($_POST['message_footer']),
+        ];
+
+        sg_save_config_settings($uid, $data);
 
         $html .= '<div class="updated"><p>تنظیمات ذخیره شد</p></div>';
         $settings = sg_get_config_settings($uid);
