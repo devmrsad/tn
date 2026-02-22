@@ -9,7 +9,140 @@ Author: Mohammadreza
 if (!defined('ABSPATH'))
     exit;
 
-/* -------- CSS (UNCHANGED STYLE SYSTEM) -------- */
+/* ======================================================
+   TABLE MANAGEMENT
+====================================================== */
+
+define('SG_SCHOOL_DB_VERSION', '1.0');
+
+function sg_school_table_name()
+{
+    global $wpdb;
+    return $wpdb->prefix . 'sg_school';
+}
+
+function sg_create_school_table()
+{
+    global $wpdb;
+    $table = sg_school_table_name();
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  school_name VARCHAR(255) NOT NULL DEFAULT '',
+  school_type VARCHAR(20) NOT NULL DEFAULT 'primary',
+  school_gender VARCHAR(10) NOT NULL DEFAULT 'boys',
+  eitaa_channel VARCHAR(100) NOT NULL DEFAULT '',
+  manager_eitaa VARCHAR(20) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_user_id (user_id)
+) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta($sql);
+
+    update_option('sg_school_db_version', SG_SCHOOL_DB_VERSION);
+}
+
+// Run on activation (standard path)
+register_activation_hook(__FILE__, 'sg_create_school_table');
+
+// Also run on plugins_loaded if table version is missing/outdated
+add_action('plugins_loaded', function () {
+    if (get_option('sg_school_db_version') !== SG_SCHOOL_DB_VERSION) {
+        sg_create_school_table();
+    }
+});
+
+/* ======================================================
+   DATA HELPERS
+====================================================== */
+
+function sg_school_defaults()
+{
+    return [
+        'school_name' => '',
+        'school_type' => 'primary',
+        'school_gender' => 'boys',
+        'eitaa_channel' => '',
+        'manager_eitaa' => '',
+    ];
+}
+
+function sg_insert_default_school_row($user_id)
+{
+    global $wpdb;
+    $d = sg_school_defaults();
+    $wpdb->query(
+        $wpdb->prepare(
+            "INSERT IGNORE INTO " . sg_school_table_name() . "
+             (user_id, school_name, school_type, school_gender, eitaa_channel, manager_eitaa)
+             VALUES (%d, %s, %s, %s, %s, %s)",
+            $user_id,
+            $d['school_name'],
+            $d['school_type'],
+            $d['school_gender'],
+            $d['eitaa_channel'],
+            $d['manager_eitaa']
+        )
+    );
+}
+add_action('user_register', 'sg_insert_default_school_row');
+
+function sg_get_school_settings($user_id)
+{
+    global $wpdb;
+
+    $row = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT * FROM " . sg_school_table_name() . " WHERE user_id = %d LIMIT 1",
+            $user_id
+        ),
+        ARRAY_A
+    );
+
+    if ($row === null) {
+        sg_insert_default_school_row($user_id);
+        return sg_school_defaults();
+    }
+
+    $settings = [];
+    foreach (sg_school_defaults() as $key => $default) {
+        $settings[$key] = (isset($row[$key]) && $row[$key] !== '') ? $row[$key] : $default;
+    }
+    return $settings;
+}
+
+function sg_save_school_settings($user_id, $data)
+{
+    global $wpdb;
+
+    $wpdb->query(
+        $wpdb->prepare(
+            "INSERT INTO " . sg_school_table_name() . "
+             (user_id, school_name, school_type, school_gender, eitaa_channel, manager_eitaa)
+             VALUES (%d, %s, %s, %s, %s, %s)
+             ON DUPLICATE KEY UPDATE
+                school_name   = VALUES(school_name),
+                school_type   = VALUES(school_type),
+                school_gender = VALUES(school_gender),
+                eitaa_channel = VALUES(eitaa_channel),
+                manager_eitaa = VALUES(manager_eitaa)",
+            $user_id,
+            $data['school_name'],
+            $data['school_type'],
+            $data['school_gender'],
+            $data['eitaa_channel'],
+            $data['manager_eitaa']
+        )
+    );
+}
+
+/* ======================================================
+   CSS (UNCHANGED STYLE SYSTEM)
+====================================================== */
+
 add_action('admin_head', 'sg_custom_css');
 add_action('wp_head', 'sg_custom_css');
 
@@ -116,32 +249,10 @@ h3{
 </style>';
 }
 
-/* -------- Defaults -------- */
-function sg_school_defaults()
-{
-    return [
-        'school_name' => '',
-        'school_type' => 'primary',
-        'school_gender' => 'boys',
-        'eitaa_channel' => '',
-        'manager_eitaa' => ''
-    ];
-}
+/* ======================================================
+   ADMIN MENU
+====================================================== */
 
-function sg_get_school_settings($user_id)
-{
-    $defaults = sg_school_defaults();
-    $settings = [];
-
-    foreach ($defaults as $key => $value) {
-        $stored = get_user_meta($user_id, $key, true);
-        $settings[$key] = ($stored === '') ? $value : $stored;
-    }
-
-    return $settings;
-}
-
-/* -------- Admin Menu -------- */
 add_action('admin_menu', function () {
     add_menu_page(
         'تنظیمات مدرسه',
@@ -154,13 +265,15 @@ add_action('admin_menu', function () {
     );
 });
 
-/* -------- Render Page -------- */
 function sg_render_school_settings_page()
 {
     echo sg_render_school_settings_form();
 }
 
-/* -------- Shortcode -------- */
+/* ======================================================
+   SHORTCODE + FORM
+====================================================== */
+
 add_shortcode('sg_school_settings', 'sg_render_school_settings_form');
 
 function sg_render_school_settings_form()
@@ -175,11 +288,15 @@ function sg_render_school_settings_form()
 
     if (isset($_POST['sg_save_school_settings'])) {
 
-        update_user_meta($uid, 'school_name', sanitize_text_field($_POST['school_name']));
-        update_user_meta($uid, 'school_type', sanitize_key($_POST['school_type']));
-        update_user_meta($uid, 'school_gender', sanitize_key($_POST['school_gender']));
-        update_user_meta($uid, 'eitaa_channel', sanitize_text_field($_POST['eitaa_channel']));
-        update_user_meta($uid, 'manager_eitaa', sanitize_text_field($_POST['manager_eitaa']));
+        $data = [
+            'school_name' => sanitize_text_field($_POST['school_name']),
+            'school_type' => sanitize_key($_POST['school_type']),
+            'school_gender' => sanitize_key($_POST['school_gender']),
+            'eitaa_channel' => sanitize_text_field($_POST['eitaa_channel']),
+            'manager_eitaa' => sanitize_text_field($_POST['manager_eitaa']),
+        ];
+
+        sg_save_school_settings($uid, $data);
 
         $html .= '<div class="updated"><p>تنظیمات ذخیره شد</p></div>';
         $settings = sg_get_school_settings($uid);
