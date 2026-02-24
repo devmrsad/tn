@@ -19,10 +19,6 @@ function sg_table_name()
     return $wpdb->prefix . 'sg_config';
 }
 
-/**
- * Create the table on plugin activation.
- * UNIQUE KEY on user_id prevents duplicates.
- */
 define('SG_CONFIG_DB_VERSION', '1.0');
 
 function sg_create_table()
@@ -31,7 +27,6 @@ function sg_create_table()
     $table = sg_table_name();
     $charset_collate = $wpdb->get_charset_collate();
 
-    // dbDelta is strict: 2 spaces indent, KEY on its own line, no trailing comma before closing paren
     $sql = "CREATE TABLE {$table} (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -51,22 +46,14 @@ function sg_create_table()
     update_option('sg_config_db_version', SG_CONFIG_DB_VERSION);
 }
 
-// Run on activation (standard path)
 register_activation_hook(__FILE__, 'sg_create_table');
 
-// Also run on plugins_loaded if table version is missing/outdated.
-// This handles cases where the plugin was already active when the
-// table code was added, or the activation hook was skipped for any reason.
 add_action('plugins_loaded', function () {
     if (get_option('sg_config_db_version') !== SG_CONFIG_DB_VERSION) {
         sg_create_table();
     }
 });
 
-/**
- * Insert a default row for a newly registered user.
- * The IGNORE keyword silently skips if the row already exists.
- */
 function sg_insert_default_row($user_id)
 {
     global $wpdb;
@@ -92,20 +79,6 @@ add_action('user_register', 'sg_insert_default_row');
    DATA HELPERS
 ====================================================== */
 
-function sg_config_prefix_options()
-{
-    return [
-        'mr' => 'جناب آقای',
-        'ms' => 'سرکار خانم',
-        'student1' => 'دانش آموز عزیز،',
-        'student2' => 'دانش آموز گرامی،',
-        'child' => 'فرزند عزیز،',
-        'uni1' => 'دانشجوی عزیز',
-        'uni2' => 'دانشجوی گرامی',
-        'none' => 'بدون پیشوند',
-    ];
-}
-
 function sg_config_defaults()
 {
     return [
@@ -118,11 +91,6 @@ function sg_config_defaults()
     ];
 }
 
-/**
- * Fetch config for a user.
- * If no row exists yet (e.g. users created before activation),
- * a default row is inserted on-the-fly and defaults are returned.
- */
 function sg_get_config_settings($user_id)
 {
     global $wpdb;
@@ -148,11 +116,6 @@ function sg_get_config_settings($user_id)
     return $settings;
 }
 
-/**
- * Save config for a user.
- * Uses INSERT … ON DUPLICATE KEY UPDATE to handle both
- * new rows and updates atomically — no duplicates possible.
- */
 function sg_save_config_settings($user_id, $data)
 {
     global $wpdb;
@@ -181,7 +144,7 @@ function sg_save_config_settings($user_id, $data)
 }
 
 /* ======================================================
-   CSS  (unchanged)
+   CSS
 ====================================================== */
 
 add_action('admin_head', 'sg_config_css');
@@ -269,6 +232,19 @@ h3{
     display: none !important;
 }
 
+.updated {
+    background: #40ff4040;
+    padding: 1rem;
+    border-radius: 5px;
+    border: none;
+    border-right: 5px solid #008700;
+    margin-bottom: 2rem;
+}
+
+.updated p {
+    margin: 0;
+}
+
 @media(max-width:700px){
     .button{
         width:100%;
@@ -307,7 +283,6 @@ add_shortcode('sg_settings_config', 'sg_render_config_form');
 
 function sg_render_config_form()
 {
-
     if (!is_user_logged_in())
         return '<p>لطفاً وارد شوید.</p>';
 
@@ -317,15 +292,12 @@ function sg_render_config_form()
 
     if (isset($_POST['sg_save_config'])) {
 
-        $valid_prefix = array_keys(sg_config_prefix_options());
-        $prefix = sanitize_key($_POST['name_prefix']);
-
         $data = [
             'send_message' => isset($_POST['send_message']) ? intval($_POST['send_message']) : 0,
             'send_hour_channel' => intval($_POST['send_hour_channel']),
             'send_teacher' => isset($_POST['send_teacher']) ? intval($_POST['send_teacher']) : 0,
             'send_hour_teacher' => intval($_POST['send_hour_teacher']),
-            'name_prefix' => in_array($prefix, $valid_prefix) ? $prefix : 'mr',
+            'name_prefix' => sanitize_text_field($_POST['name_prefix']),
             'message_footer' => sanitize_text_field($_POST['message_footer']),
         ];
 
@@ -351,12 +323,20 @@ function sg_render_config_form()
             <div class="sg-settings-section">
                 <h3>ارسال پیام در کانال ایتا</h3>
 
-                <label>
+                <label style="
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+">
                     <input type="radio" name="send_message" value="1" <?= ($settings['send_message'] == 1) ? 'checked' : '' ?>>
                     فعال
                 </label>
 
-                <label>
+                <label style="
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+">
                     <input type="radio" name="send_message" value="0" <?= ($settings['send_message'] == 0) ? 'checked' : '' ?>>
                     غیرفعال
                 </label>
@@ -365,7 +345,7 @@ function sg_render_config_form()
 
                 <label>ساعت ارسال در کانال</label>
                 <select name="send_hour_channel" class="sg-input">
-                    <?php foreach ([8, 10, 12] as $h): ?>
+                    <?php foreach ([7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] as $h): ?>
                         <option value="<?= $h ?>" <?= ($settings['send_hour_channel'] == $h) ? 'selected' : '' ?>>
                             <?= $h ?>:00
                         </option>
@@ -375,14 +355,22 @@ function sg_render_config_form()
 
             <!-- ارسال به معلم -->
             <div class="sg-settings-section">
-                <h3>ارسال پیام به ایتای معلم</h3>
+                <h3>ارسال پیام به ایتای معلم (روز قبل از تولد)</h3>
 
-                <label>
+                <label style="
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+">
                     <input type="radio" name="send_teacher" value="1" <?= ($settings['send_teacher'] == 1) ? 'checked' : '' ?>>
                     فعال
                 </label>
 
-                <label>
+                <label style="
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+">
                     <input type="radio" name="send_teacher" value="0" <?= ($settings['send_teacher'] == 0) ? 'checked' : '' ?>>
                     غیرفعال
                 </label>
@@ -391,7 +379,7 @@ function sg_render_config_form()
 
                 <label>ساعت ارسال به معلم</label>
                 <select name="send_hour_teacher" class="sg-input">
-                    <?php foreach ([16, 18, 20] as $h): ?>
+                    <?php foreach ([13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] as $h): ?>
                         <option value="<?= $h ?>" <?= ($settings['send_hour_teacher'] == $h) ? 'selected' : '' ?>>
                             <?= $h ?>:00
                         </option>
@@ -402,17 +390,10 @@ function sg_render_config_form()
             <!-- پیشوند -->
             <div class="sg-settings-section">
                 <h3>پیشوند نام</h3>
-
-                <select name="name_prefix" class="sg-input">
-                    <?php foreach (sg_config_prefix_options() as $key => $label): ?>
-                        <option value="<?= esc_attr($key) ?>" <?= ($settings['name_prefix'] == $key) ? 'selected' : '' ?>>
-                            <?= esc_html($label) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <input type="text" name="name_prefix" value="<?= esc_attr($settings['name_prefix']) ?>" class="sg-input">
 
                 <span class="sg-field-desc">
-                    دانش آموز در پیام با این لقب خطاب میشود.
+                    مثلا: دانش آموز عزیز، دانشجوی عزیز، جناب آقای، سرکار خانم و یا ...
                 </span>
             </div>
 

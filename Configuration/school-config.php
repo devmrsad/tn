@@ -228,6 +228,10 @@ h3{
     box-shadow:0 0 0 3px rgba(65,105,225,.15);
 }
 
+.sg-input{
+    height: 40px !important;
+}
+
 /* ---------- Descriptions ---------- */
 
 .sg-field-desc{
