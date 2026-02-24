@@ -232,6 +232,19 @@ h3{
     height: 40px !important;
 }
 
+.updated {
+    background: #40ff4040;
+    padding: 1rem;
+    border-radius: 5px;
+    border: none;
+    border-right: 5px solid #008700;
+    margin-bottom: 2rem;
+}
+
+.updated p {
+    margin: 0;
+}
+
 /* ---------- Descriptions ---------- */
 
 .sg-field-desc{
@@ -325,7 +338,9 @@ function sg_render_school_settings_form()
                 <select name="school_type" class="sg-input">
                     <option value="primary" <?= ($settings['school_type'] == 'primary') ? 'selected' : '' ?>>ابتدایی</option>
                     <option value="middle" <?= ($settings['school_type'] == 'middle') ? 'selected' : '' ?>>متوسطه اول</option>
-                    <option value="high" <?= ($settings['school_type'] == 'high') ? 'selected' : '' ?>>متوسطه دوم</option>
+                    <option value="high" <?= ($settings['school_type'] == 'high') ? 'selected' : '' ?>>دبیرستان</option>
+                    <option value="technical" <?= ($settings['school_type'] == 'technical') ? 'selected' : '' ?>>هنرستان</option>
+                    <option value="institute" <?= ($settings['school_type'] == 'institute') ? 'selected' : '' ?>>آموزشگاه (خارج از آموزش و پرورش)</option>
                 </select>
 
                 <br><br>
