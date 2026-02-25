@@ -229,7 +229,7 @@ h3{
 }
 
 .sg-input{
-    height: 40px !important;
+    height: 53px !important;
 }
 
 .updated {

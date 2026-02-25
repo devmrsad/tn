@@ -213,6 +213,7 @@ h3{
     border:1px solid #d5d9df;
     font-size:14px;
     background:#fbfcfe;
+    height: 53px !important;
 }
 
 .sg-input:focus{
