@@ -159,7 +159,7 @@ body {
 }
 
 .sg-settings-panel{
-    max-width:900px;
+    max-width:1500px !important;
     margin:auto;
 }
 
