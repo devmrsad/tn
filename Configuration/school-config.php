@@ -356,7 +356,7 @@ function sg_render_school_settings_form()
             <div class="sg-settings-section">
                 <h3>اطلاعات ایتا</h3>
 
-                <label>آدرس کانال ایتا</label>
+                <label>آیدی کانال ایتا</label>
                 <input type="text" placeholder="مثال: myschoolchannel" name="eitaa_channel"
                     value="<?= esc_attr($settings['eitaa_channel']) ?>" class="sg-input">
 
