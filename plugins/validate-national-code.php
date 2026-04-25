@@ -13,7 +13,7 @@ defined( 'ABSPATH' ) or die( 'Access denied.' );
 define( 'GFNC_FORM_ID', 1 );
 define( 'GFNC_FIELD_ID', 11 );
 define( 'GFNC_REGEX_PATTERN', '/^\d{10}$/' ); // Regex pattern (10 digits only)
-define( 'GFNC_ERROR_MESSAGE', 'National code must be exactly 10 digits.' );
+define( 'GFNC_ERROR_MESSAGE', 'کد ملی وارد شده نامعتبر است!' );
 // ===========================
 
 add_filter( 'gform_field_validation', 'gfnc_validate_national_code', 10, 4 );
