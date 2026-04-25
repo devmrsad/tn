@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name:  Change Photo Name
- * Description:  chnages uploaded photo's name to the entered national code
+ * Plugin Name:  Change Photo Name (After Submission)
+ * Description:  Renames the uploaded photo to the entered National Code after form submission.
  * Version:      1.0
  * Author:       Mohammadreza
  * License:      GPL v2 or later
@@ -9,46 +9,49 @@
 
 defined( 'ABSPATH' ) or die( 'Access denied.' );
 
-define( 'GFRU_FORM_ID', 1 );
-define( 'GFRU_NATIONAL_CODE_FIELD_ID', 11 );
-define( 'GFRU_UPLOAD_FIELD_ID', 10 );
-// =============================================================
+// ====== CONFIGURATION ======
+define( 'GFRU_FORM_ID', 1 );                   // Your form ID
+define( 'GFRU_NATIONAL_CODE_FIELD_ID', 11 );   // National Code field ID
+define( 'GFRU_UPLOAD_FIELD_ID', 10 );          // File Upload field ID
+// ===========================
 
-add_filter( 'gform_upload_path', 'rename_upload_based_on_national_code', 10, 2 );
-function rename_upload_based_on_national_code( $path_info, $form_id ) {
-    // Only run on the configured form
-    if ( $form_id != GFRU_FORM_ID ) {
-        return $path_info;
+add_action( 'gform_after_submission', 'gfru_rename_file_after_submit', 10, 2 );
+function gfru_rename_file_after_submit( $entry, $form ) {
+    if ( $form['id'] != GFRU_FORM_ID ) {
+        return;
     }
 
-    // Only affect the specific upload field
-    if ( $path_info['field_id'] != GFRU_UPLOAD_FIELD_ID ) {
-        return $path_info;
+    // 1. Get National Code and uploaded file URL
+    $national_code = rgar( $entry, GFRU_NATIONAL_CODE_FIELD_ID );
+    $file_url      = rgar( $entry, GFRU_UPLOAD_FIELD_ID );
+
+    if ( empty( $national_code ) || empty( $file_url ) ) {
+        return; // nothing to rename
     }
 
-    // Get the National Code from the POST data
-    $national_code = rgpost( 'input_' . GFRU_NATIONAL_CODE_FIELD_ID );
-
-    if ( empty( $national_code ) ) {
-        return $path_info;
-    }
-
-    // Sanitise: keep only alphanumeric and hyphens (adjust if your codes contain other chars)
+    // 2. Sanitise for safe filename
     $safe_code = preg_replace( '/[^a-zA-Z0-9\-]/', '', $national_code );
     if ( empty( $safe_code ) ) {
-        return $path_info;
+        return;
     }
 
-    // Get original file extension
-    $original_name = $path_info['name'];
-    $ext = pathinfo( $original_name, PATHINFO_EXTENSION );
+    // 3. Convert URL to server path
+    $upload_dir = wp_get_upload_dir();
+    $file_path  = str_replace( $upload_dir['baseurl'], $upload_dir['basedir'], $file_url );
 
-    // Build new name: e.g., 1162242327.jpg
+    if ( ! file_exists( $file_path ) ) {
+        return;
+    }
+
+    // 4. Build new filename with original extension
+    $ext      = pathinfo( $file_path, PATHINFO_EXTENSION );
     $new_name = $safe_code . '.' . $ext;
+    $new_path = trailingslashit( dirname( $file_path ) ) . $new_name;
 
-    // Update the path info array
-    $path_info['name'] = $new_name;
-    $path_info['url']  = trailingslashit( $path_info['url'] ) . $new_name;
-
-    return $path_info;
+    // 5. Rename the file
+    if ( rename( $file_path, $new_path ) ) {
+        // 6. Update the entry with the new URL
+        $new_url = str_replace( $upload_dir['basedir'], $upload_dir['baseurl'], $new_path );
+        GFAPI::update_entry_field( $entry['id'], GFRU_UPLOAD_FIELD_ID, $new_url );
+    }
 }
