@@ -1431,9 +1431,28 @@ section {
 }
 
 .footer-bottom {
-    text-align: center;
+    margin-top: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: .35rem;
     font-size: 0.7rem;
     opacity: 0.6;
+    color: #EEE;
+}
+
+#designer-quote{
+    color: #9ca3af;
+}
+
+.separator{
+    height: 1px;
+    margin-bottom: 1.5rem;
+    margin-top: .35rem;
+    width: 100px;
+    border-radius: 50vw;
+    background: #9ca3af;
 }
 
 @media (max-width: 1160px) {
